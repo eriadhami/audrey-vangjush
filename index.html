@@ -190,6 +190,17 @@ html{-webkit-text-size-adjust:100%}
 .slide#s1 > .card{transition:opacity 1.1s ease, transform 1.4s cubic-bezier(.2,.7,.2,1)}
 .stage.opening:not(.reading) #s1.in > .card{transition-delay:.5s}
 
+
+/* WebGL envelope (when available): the canvas replaces the CSS flaps */
+.glcv{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:0}
+.gate.gl .f,.gate.gl .sh{display:none}
+.glseal{display:none;position:absolute;left:50%;top:53%;z-index:6;width:clamp(76px,22vw,96px);aspect-ratio:1;transform:translate(-50%,-50%);
+  border:0;padding:0;background:none;border-radius:50%;cursor:pointer;pointer-events:auto;-webkit-tap-highlight-color:transparent}
+.gate.gl .glseal{display:block}
+.glseal::after{content:"";position:absolute;inset:-10px;border-radius:50%;border:1px solid rgba(255,255,255,.4);animation:pulse 2.4s ease-out infinite}
+.glseal:focus-visible{outline:2px solid #fff;outline-offset:4px}
+.stage.opening .glseal{display:none}
+
 /* Butterfly that rises out of the opened envelope */
 .bfly{position:fixed;left:50%;top:50%;z-index:25;width:clamp(84px,25vw,108px);margin:calc(clamp(84px,25vw,108px)/-2.4) 0 0 calc(clamp(84px,25vw,108px)/-2);pointer-events:none;opacity:0;visibility:hidden}
 .bfly svg{display:block;width:100%;height:auto;overflow:visible;filter:drop-shadow(0 6px 6px rgba(60,20,30,.25))}
@@ -425,6 +436,7 @@ textarea.txt{resize:vertical;min-height:52px}
         </svg>
       </button>
     </div>
+    <button class="glseal" id="glseal" type="button" aria-label="Hap ftesën"></button>
     <p class="ghint">Prekni vulën për ta hapur</p>
   </div>
 
@@ -549,6 +561,188 @@ textarea.txt{resize:vertical;min-height:52px}
   </div>
 </main>
 
+<script src="three.min.js"></script>
+<script>
+/* ---------- WebGL envelope: real bending paper, light and cast shadows ---------- */
+window.GLENV=(function(){
+  var T=window.THREE;
+  var reduceM=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if(!T||reduceM)return null;
+  var gate=document.getElementById('gate');
+  var cv=document.createElement('canvas');cv.className='glcv';cv.setAttribute('aria-hidden','true');
+  var r;
+  try{r=new T.WebGLRenderer({canvas:cv,antialias:true,alpha:true,powerPreference:'high-performance'});}catch(e){return null;}
+  if(!r||!r.getContext())return null;
+  r.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+  r.setClearColor(0x000000,0);
+  r.shadowMap.enabled=true;r.shadowMap.type=T.PCFSoftShadowMap;
+
+  var scene=new T.Scene();
+  var cam=new T.PerspectiveCamera(32,1,0.05,40);
+  scene.add(new T.HemisphereLight(0xffffff,0x8d927f,0.62));
+  var sun=new T.DirectionalLight(0xfffaf0,0.55);
+  sun.position.set(-1.1,1.9,4.2);sun.castShadow=true;
+  sun.shadow.mapSize.set(2048,2048);sun.shadow.bias=-0.0008;
+  if('normalBias' in sun.shadow)sun.shadow.normalBias=0.004;
+  scene.add(sun);scene.add(sun.target);
+  var floor=new T.Mesh(new T.PlaneGeometry(1,1),new T.ShadowMaterial({opacity:0.2}));
+  floor.position.z=-0.03;floor.receiveShadow=true;scene.add(floor);
+
+  /* textures */
+  function leaves(g,col){
+    g.strokeStyle=col;g.lineWidth=2;
+    for(var y=-40;y<560;y+=118)for(var x=-40;x<560;x+=118){
+      g.save();g.translate(x+((y/118)%2?59:0),y);
+      g.beginPath();g.moveTo(10,96);g.bezierCurveTo(36,70,56,46,96,10);g.stroke();
+      [[30,76,-.9],[44,60,.9],[58,46,-.9],[72,32,.9],[84,20,-.9]].forEach(function(l){
+        g.save();g.translate(l[0],l[1]);g.rotate(l[2]-.75);
+        g.beginPath();g.ellipse(0,-9,4.5,10,0,0,Math.PI*2);g.stroke();g.restore();
+      });
+      g.restore();
+    }
+  }
+  function flapTex(color,liner){
+    var c=document.createElement('canvas');c.width=c.height=1024;var g=c.getContext('2d');
+    g.beginPath();g.moveTo(0,1024);g.lineTo(1024,1024);g.lineTo(512,0);g.closePath();g.clip();
+    g.fillStyle=color;g.fillRect(0,0,1024,1024);
+    var gr=g.createLinearGradient(0,1024,0,0);
+    gr.addColorStop(0,liner?'rgba(86,99,77,.10)':'rgba(0,0,0,.10)');gr.addColorStop(1,'rgba(255,255,255,.05)');
+    g.fillStyle=gr;g.fillRect(0,0,1024,1024);
+    g.save();g.scale(2,2);leaves(g,liner?'rgba(86,99,77,.13)':'rgba(255,255,255,.05)');g.restore();
+    var t=new T.CanvasTexture(c);t.anisotropy=Math.min(8,r.capabilities.getMaxAnisotropy());return t;
+  }
+  function sealTex(){
+    var c=document.createElement('canvas');c.width=c.height=512;var g=c.getContext('2d');
+    g.translate(256,256);
+    g.beginPath();
+    for(var k=0;k<=360;k++){var a=k*Math.PI/180,rr=218*(1+.035*Math.sin(9*a)+.022*Math.sin(5*a+1)+.015*Math.sin(13*a+2));
+      k?g.lineTo(rr*Math.cos(a),rr*Math.sin(a)):g.moveTo(rr*Math.cos(a),rr*Math.sin(a));}
+    g.closePath();
+    var gr=g.createRadialGradient(-70,-80,10,0,0,240);
+    gr.addColorStop(0,'#a32d34');gr.addColorStop(.55,'#6f1519');gr.addColorStop(1,'#460a0e');
+    g.fillStyle=gr;g.fill();
+    g.lineWidth=12;g.strokeStyle='rgba(60,6,10,.55)';g.beginPath();g.arc(0,0,138,0,Math.PI*2);g.stroke();
+    g.lineWidth=4;g.strokeStyle='rgba(190,70,76,.5)';g.beginPath();g.arc(0,0,124,0,Math.PI*2);g.stroke();
+    g.textAlign='center';g.textBaseline='middle';
+    g.font='italic 112px "Pinyon Script", "Cormorant Garamond", Georgia, serif';
+    g.fillStyle='rgba(178,71,76,.55)';g.fillText('A&V',-3,13);
+    g.fillStyle='rgba(70,8,12,.92)';g.fillText('A&V',0,16);
+    return new T.CanvasTexture(c);
+  }
+
+  /* flaps: bending strips hinged on the screen edges */
+  var NS=10,NV=56,flaps=[],seal=null,W=1,H=2;
+  var specs=[
+    {k:'l',in:[1,0],z:.002,len:.51,col:'#4d5944',delay:1.35,dur:1.6},
+    {k:'r',in:[-1,0],z:.0026,len:.51,col:'#4b5742',delay:1.45,dur:1.6},
+    {k:'bt',in:[0,1],z:.0045,len:.53,col:'#525f49',delay:.95,dur:1.6},
+    {k:'t',in:[0,-1],z:.0065,len:.53,col:'#58654f',delay:.25,dur:1.7}
+  ];
+  var Z=new T.Vector3(0,0,1);
+  function build(){
+    flaps.forEach(function(f){scene.remove(f.front);scene.remove(f.back);f.geo.dispose();});
+    flaps=[];
+    specs.forEach(function(sp){
+      var In=new T.Vector3(sp.in[0],sp.in[1],0);
+      var Hd=new T.Vector3().crossVectors(Z,In);
+      var vertical=sp.in[1]!==0;
+      var hingeLen=vertical?W:H, L=(vertical?H:W)*sp.len;
+      var P=vertical?new T.Vector3(0,-sp.in[1]*H/2,0):new T.Vector3(-sp.in[0]*W/2,0,0);
+      var n=(NS+1)*(NV+1),geo=new T.BufferGeometry();
+      var pos=new Float32Array(n*3),uv=new Float32Array(n*2),idx=[];
+      for(var j=0;j<=NV;j++)for(var i=0;i<=NS;i++){var q=j*(NS+1)+i;uv[2*q]=i/NS;uv[2*q+1]=j/NV;}
+      for(j=0;j<NV;j++)for(i=0;i<NS;i++){var a=j*(NS+1)+i,b=a+1,c=a+NS+1,d=c+1;idx.push(a,c,b,b,c,d);}
+      geo.setAttribute('position',new T.BufferAttribute(pos,3));
+      geo.setAttribute('uv',new T.BufferAttribute(uv,2));
+      geo.setIndex(idx);
+      var ft=sp.ft||(sp.ft=flapTex(sp.col,false)),bt=sp.bt||(sp.bt=flapTex('#f1efe7',true));
+      var front=new T.Mesh(geo,new T.MeshLambertMaterial({map:ft,alphaTest:.5,side:T.FrontSide}));
+      var back=new T.Mesh(geo,new T.MeshLambertMaterial({map:bt,alphaTest:.5,side:T.BackSide}));
+      front.castShadow=true;front.receiveShadow=true;back.receiveShadow=true;
+      front.customDepthMaterial=new T.MeshDepthMaterial({depthPacking:T.RGBADepthPacking,map:ft,alphaTest:.5,side:T.DoubleSide});
+      scene.add(front);scene.add(back);
+      var f={sp:sp,geo:geo,pos:pos,front:front,back:back,In:In,Hd:Hd,P:P,hl:hingeLen,L:L,tip:new T.Vector3(),tan:new T.Vector3()};
+      update(f,0,0);flaps.push(f);
+    });
+    if(!seal){
+      seal=new T.Mesh(new T.PlaneGeometry(1,1),new T.MeshLambertMaterial({map:sealTex(),alphaTest:.5}));
+      seal.castShadow=true;
+      seal.customDepthMaterial=new T.MeshDepthMaterial({depthPacking:T.RGBADepthPacking,map:seal.material.map,alphaTest:.5});
+      scene.add(seal);
+    }
+    var s=Math.min(Math.max(W*0.23,76/innerWidth*W),96/innerWidth*W);
+    seal.scale.set(s*1.06,s*1.06,1);
+    placeSeal();
+  }
+  function update(f,theta,curl){
+    var dv=f.L/NV,al=0,up=0,pos=f.pos,P=f.P,Hd=f.Hd,In=f.In,z0=f.sp.z,a=theta;
+    for(var j=0;j<=NV;j++){
+      var t=j/NV;
+      for(var i=0;i<=NS;i++){
+        var u=(i/NS-.5)*f.hl,q=(j*(NS+1)+i)*3;
+        pos[q]=P.x+Hd.x*u+In.x*al;
+        pos[q+1]=P.y+Hd.y*u+In.y*al;
+        pos[q+2]=z0+up;
+      }
+      a=theta+curl*t*t;
+      al+=dv*Math.cos(a);up+=dv*Math.sin(a);
+    }
+    f.geo.attributes.position.needsUpdate=true;
+    f.geo.computeVertexNormals();
+    f.geo.computeBoundingSphere();
+    // tip of the centre line, and the paper's direction there
+    var q=(NV*(NS+1)+NS/2)*3;
+    f.tip.set(pos[q],pos[q+1],pos[q+2]);
+    var at=theta+curl;
+    f.tan.copy(In).multiplyScalar(Math.cos(at)).addScaledVector(Z,Math.sin(at));
+  }
+  var M=new T.Matrix4(),X=new T.Vector3(),Y=new T.Vector3(),N=new T.Vector3();
+  function placeSeal(){
+    var f=flaps[3];if(!f||!seal)return;
+    X.copy(f.Hd);Y.copy(f.tan).negate();N.crossVectors(f.tan,f.Hd);
+    M.makeBasis(X,Y,N);seal.quaternion.setFromRotationMatrix(M);
+    seal.position.copy(f.tip).addScaledVector(N,.006);
+  }
+  function resize(){
+    var w=innerWidth,h=innerHeight;
+    r.setSize(w,h,false);
+    H=2;W=2*w/h;
+    cam.aspect=w/h;cam.fov=32;
+    cam.position.set(0,0,(H/2)/Math.tan(cam.fov*Math.PI/360));
+    cam.updateProjectionMatrix();cam.lookAt(0,0,0);
+    floor.scale.set(W,H,1);
+    var sc=sun.shadow.camera;sc.left=-W;sc.right=W;sc.top=H;sc.bottom=-H;sc.near=.5;sc.far=12;sc.updateProjectionMatrix();
+    build();render();
+  }
+  function render(){r.render(scene,cam);}
+
+  /* motion: eased swing, with the tip leading and then trailing like real paper */
+  function bez(x1,y1,x2,y2){return function(x){var lo=0,hi=1,t;for(var k=0;k<30;k++){t=(lo+hi)/2;var bx=3*(1-t)*(1-t)*t*x1+3*(1-t)*t*t*x2+t*t*t;bx<x?lo=t:hi=t;}t=(lo+hi)/2;return 3*(1-t)*(1-t)*t*y1+3*(1-t)*t*t*y2+t*t*t;};}
+  var ease=bez(.55,.06,.3,1);
+  var cs=[[0,0],[.2,1],[.5,.15],[.78,-.6],[1,0]];
+  function curlAt(t){for(var k=0;k<cs.length-1;k++){var a=cs[k],b=cs[k+1];if(t>=a[0]&&t<=b[0]){var u=(t-a[0])/(b[0]-a[0]);u=u*u*(3-2*u);return a[1]+(b[1]-a[1])*u;}}return 0;}
+  var raf=0,t0=0;
+  function frame(now){
+    var e=(now-t0)/1000,done=true;
+    flaps.forEach(function(f){
+      var p=Math.min(Math.max((e-f.sp.delay)/f.sp.dur,0),1);if(p<1)done=false;
+      update(f,Math.PI*ease(p),.55*curlAt(p));
+    });
+    placeSeal();render();
+    raf=done?0:requestAnimationFrame(frame);
+  }
+  function open(){cancelAnimationFrame(raf);t0=performance.now();raf=requestAnimationFrame(frame);}
+  function reset(){cancelAnimationFrame(raf);raf=0;flaps.forEach(function(f){update(f,0,0);});placeSeal();render();}
+
+  gate.insertBefore(cv,gate.firstChild);gate.classList.add('gl');
+  window.addEventListener('resize',function(){if(!raf)resize();});
+  resize();
+  if(document.fonts&&document.fonts.ready)document.fonts.ready.then(function(){
+    if(seal){seal.material.map.dispose();seal.material.map=sealTex();seal.customDepthMaterial.map=seal.material.map;seal.material.needsUpdate=true;render();}
+  });
+  return {open:open,reset:reset};
+})();
+</script>
 <script>
 (function(){
   var stage=document.getElementById('stage'),
@@ -559,6 +753,7 @@ textarea.txt{resize:vertical;min-height:52px}
   function open(){
     if(stage.classList.contains('opening'))return;
     letter.scrollTop=0;
+    if(window.GLENV)GLENV.open();
     stage.classList.add('opening');
     clearTimeout(t);clearTimeout(t2);
     t2=setTimeout(function(){slides[0].classList.add('in');setDot(0);}, reduce?20:1500);
@@ -569,7 +764,8 @@ textarea.txt{resize:vertical;min-height:52px}
     stage.classList.remove('reading');
     t=setTimeout(function(){
       stage.classList.remove('opening');
-      seal.focus({preventScroll:true});
+      if(window.GLENV){GLENV.reset();document.getElementById('glseal').focus({preventScroll:true});}
+      else seal.focus({preventScroll:true});
       t2=setTimeout(function(){slides.forEach(function(sl){sl.classList.remove('in');});letter.scrollTop=0;}, reduce?20:1300);
     }, 30);
   }
@@ -598,6 +794,7 @@ textarea.txt{resize:vertical;min-height:52px}
   }
 
   seal.addEventListener('click',open);
+  var gls=document.getElementById('glseal');if(gls)gls.addEventListener('click',open);
   again.addEventListener('click',close);
 
   /* RSVP */
