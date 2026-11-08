@@ -118,6 +118,22 @@ html{-webkit-text-size-adjust:100%}
 }
 .stage.opening .ghint{opacity:0}
 
+
+/* Butterfly that rises out of the opened envelope */
+.bfly{position:fixed;left:50%;top:50%;z-index:25;width:clamp(84px,25vw,108px);margin:calc(clamp(84px,25vw,108px)/-2.4) 0 0 calc(clamp(84px,25vw,108px)/-2);pointer-events:none;opacity:0;visibility:hidden}
+.bfly svg{display:block;width:100%;height:auto;overflow:visible;filter:drop-shadow(0 6px 6px rgba(60,20,30,.25))}
+.bfly .wing{transform-box:fill-box;transform-origin:100% 50%;animation:flap .2s ease-in-out infinite alternate}
+.stage.opening .bfly{visibility:visible;animation:flyaway 3.6s cubic-bezier(.4,0,.6,1) .55s both}
+@keyframes flap{from{transform:scaleX(1)}to{transform:scaleX(.22)}}
+@keyframes flyaway{
+  0%{opacity:0;transform:translate(0,10px) scale(.35) rotate(0deg)}
+  12%{opacity:1;transform:translate(0,-8px) scale(1) rotate(-4deg)}
+  35%{opacity:1;transform:translate(18vw,-14vh) scale(.95) rotate(14deg)}
+  60%{opacity:1;transform:translate(-14vw,-30vh) scale(.85) rotate(-12deg)}
+  85%{opacity:.9;transform:translate(16vw,-52vh) scale(.7) rotate(16deg)}
+  100%{opacity:0;transform:translate(30vw,-72vh) scale(.6) rotate(22deg)}
+}
+
 /* ---------- Letter: invitation + RSVP ---------- */
 /* After the seal: one full screen per page, snapping as you swipe up */
 .letter{
@@ -300,6 +316,7 @@ textarea.txt{resize:vertical;min-height:52px}
   .rsvp form{gap:18px}
 }
 @media (prefers-reduced-motion: reduce){
+  .bfly{display:none}
   *,*::before,*::after{transition-duration:.01s!important;transition-delay:0s!important;animation:none!important}
 }
 </style>
@@ -329,6 +346,30 @@ textarea.txt{resize:vertical;min-height:52px}
         </svg>
       </button>
     <p class="ghint">Prekni vulën për ta hapur</p>
+  </div>
+
+  <div class="bfly" aria-hidden="true">
+    <svg viewBox="-50 -42 100 84">
+      <defs>
+        <linearGradient id="bw1" x1="1" y1="0" x2="0" y2=".3"><stop offset="0" stop-color="#f3d3c6"/><stop offset=".55" stop-color="#d98f86"/><stop offset="1" stop-color="#8e2f3e"/></linearGradient>
+        <linearGradient id="bw2" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f0cbbd"/><stop offset="1" stop-color="#a5434f"/></linearGradient>
+      </defs>
+      <g class="wing">
+          <path d="M0 -3C-8 -28 -40 -38 -45 -21C-49 -6 -27 2 0 0Z" fill="url(#bw1)" stroke="#6b2234" stroke-width=".7"/>
+          <path d="M0 2C-19 3 -37 13 -31 28C-25 39 -6 27 0 6Z" fill="url(#bw2)" stroke="#6b2234" stroke-width=".7"/>
+          <path d="M-4 -4C-14 -16 -28 -24 -38 -20M-4 3C-14 9 -22 16 -24 25" fill="none" stroke="#6b2234" stroke-width=".45" opacity=".55"/>
+          <circle cx="-34" cy="-18" r="2.6" fill="#fff4ee" opacity=".85"/><circle cx="-26" cy="-26" r="1.6" fill="#fff4ee" opacity=".7"/><circle cx="-22" cy="22" r="2" fill="#fff4ee" opacity=".75"/>
+      </g>
+      <g transform="scale(-1 1)"><g class="wing">
+          <path d="M0 -3C-8 -28 -40 -38 -45 -21C-49 -6 -27 2 0 0Z" fill="url(#bw1)" stroke="#6b2234" stroke-width=".7"/>
+          <path d="M0 2C-19 3 -37 13 -31 28C-25 39 -6 27 0 6Z" fill="url(#bw2)" stroke="#6b2234" stroke-width=".7"/>
+          <path d="M-4 -4C-14 -16 -28 -24 -38 -20M-4 3C-14 9 -22 16 -24 25" fill="none" stroke="#6b2234" stroke-width=".45" opacity=".55"/>
+          <circle cx="-34" cy="-18" r="2.6" fill="#fff4ee" opacity=".85"/><circle cx="-26" cy="-26" r="1.6" fill="#fff4ee" opacity=".7"/><circle cx="-22" cy="22" r="2" fill="#fff4ee" opacity=".75"/>
+      </g></g>
+      <ellipse cx="0" cy="2" rx="2.2" ry="15" fill="#4a1622"/>
+      <circle cx="0" cy="-14" r="2.6" fill="#4a1622"/>
+      <path d="M-1 -16C-4 -24 -8 -28 -11 -30M1 -16C4 -24 8 -28 11 -30" fill="none" stroke="#4a1622" stroke-width=".8" stroke-linecap="round"/>
+    </svg>
   </div>
 
   <nav class="dots" id="dots" aria-label="Faqet">
