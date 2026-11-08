@@ -194,8 +194,8 @@ html{-webkit-text-size-adjust:100%}
 /* WebGL envelope (when available): the canvas replaces the CSS flaps */
 .glcv{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:0}
 .gate.gl .f,.gate.gl .sh{display:none}
-.stage:has(.gate.gl){--fly:2.35s}
-.gate.gl{transition:background-color 1s ease 1.75s}
+.stage:has(.gate.gl){--fly:1.7s}
+.gate.gl{transition:background-color 1s ease 1.2s}
 .glseal{display:none;position:absolute;left:50%;top:53%;z-index:6;width:clamp(76px,22vw,96px);aspect-ratio:1;transform:translate(-50%,-50%);
   border:0;padding:0;background:none;border-radius:50%;cursor:pointer;pointer-events:auto;-webkit-tap-highlight-color:transparent}
 .gate.gl .glseal{display:block}
@@ -642,13 +642,13 @@ window.GLENV=(function(){
   }
 
   /* flaps: bending strips hinged on the screen edges */
-  var NS=10,NV=64,flaps=[],seals=null,W=1,H=2,crack=0,press=0,sealS=1;
+  var NS=28,NV=64,flaps=[],seals=null,W=1,H=2,crack=0,press=0,sealS=1;
   var root=new T.Group();scene.add(root);
   var specs=[
-    {k:'l',in:[1,0],z:.002,len:.51,col:'#4d5944',delay:.38,dur:1.55},
-    {k:'r',in:[-1,0],z:.0026,len:.51,col:'#4b5742',delay:.44,dur:1.55},
-    {k:'bt',in:[0,1],z:.0045,len:.53,col:'#525f49',delay:.3,dur:1.55},
-    {k:'t',in:[0,-1],z:.0065,len:.53,col:'#58654f',delay:1.3,dur:1.45}
+    {k:'l',in:[1,0],z:.002,len:.51,col:'#4d5944',delay:.22,dur:2.2,ph:.7,ro:1},
+    {k:'r',in:[-1,0],z:.0026,len:.51,col:'#4b5742',delay:.26,dur:2.2,ph:2.1,ro:2},
+    {k:'bt',in:[0,1],z:.0045,len:.53,col:'#525f49',delay:.18,dur:2.2,ph:1.3,ro:3},
+    {k:'t',in:[0,-1],z:.0065,len:.53,col:'#58654f',delay:.14,dur:2.35,ph:0,ro:4}
   ];
   var Z=new T.Vector3(0,0,1);
   function build(){
@@ -668,8 +668,10 @@ window.GLENV=(function(){
       geo.setAttribute('uv',new T.BufferAttribute(uv,2));
       geo.setIndex(idx);
       var ft=sp.ft||(sp.ft=flapTex(sp.col,false)),bt=sp.bt||(sp.bt=flapTex('#f1efe7',true));
-      var front=new T.Mesh(geo,new T.MeshLambertMaterial({map:ft,alphaTest:.5,side:T.FrontSide}));
-      var back=new T.Mesh(geo,new T.MeshLambertMaterial({map:bt,alphaTest:.5,side:T.BackSide}));
+      /* paper layers: drawn in envelope order (sides, bottom, top) like stacked sheets */
+      var front=new T.Mesh(geo,new T.MeshLambertMaterial({map:ft,alphaTest:.5,side:T.FrontSide,depthTest:false}));
+      var back=new T.Mesh(geo,new T.MeshLambertMaterial({map:bt,alphaTest:.5,side:T.BackSide,depthTest:false}));
+      front.renderOrder=back.renderOrder=sp.ro;
       front.castShadow=true;front.receiveShadow=true;back.receiveShadow=true;
       front.customDepthMaterial=new T.MeshDepthMaterial({depthPacking:T.RGBADepthPacking,map:ft,alphaTest:.5,side:T.DoubleSide});
       root.add(front);root.add(back);
@@ -680,7 +682,7 @@ window.GLENV=(function(){
       var full=sealTex();
       seals=[true,false].map(function(top){
         var tx=new T.CanvasTexture(full);
-        var m=new T.Mesh(new T.PlaneGeometry(1,1),new T.MeshLambertMaterial({map:tx,alphaTest:.5}));
+        var m=new T.Mesh(new T.PlaneGeometry(1,1),new T.MeshLambertMaterial({map:tx,alphaTest:.5,depthTest:false}));m.renderOrder=10;
         m.castShadow=true;
         m.customDepthMaterial=new T.MeshDepthMaterial({depthPacking:T.RGBADepthPacking,map:tx,alphaTest:.5});
         root.add(m);if(!top)m.visible=false;return m;
@@ -690,15 +692,18 @@ window.GLENV=(function(){
     sealS=s*1.06;seals.forEach(function(m){m.scale.set(sealS,sealS,1);});
     placeSeal();
   }
-  function update(f,theta,curl){
-    var dv=f.L/NV,al=0,up=0,pos=f.pos,P=f.P,Hd=f.Hd,In=f.In,z0=f.sp.z,a=theta;
+  function update(f,theta,curl,wr){
+    wr=wr||0;
+    var dv=f.L/NV,al=0,up=0,pos=f.pos,P=f.P,Hd=f.Hd,In=f.In,z0=f.sp.z,a=theta,ph=f.sp.ph||0;
     for(var j=0;j<=NV;j++){
-      var t=j/NV;
+      var t=j/NV,sa=Math.sin(a),ca=Math.cos(a);
       for(var i=0;i<=NS;i++){
-        var u=(i/NS-.5)*f.hl,q=(j*(NS+1)+i)*3;
-        pos[q]=P.x+Hd.x*u+In.x*al;
-        pos[q+1]=P.y+Hd.y*u+In.y*al;
-        pos[q+2]=z0+up;
+        var un=i/NS-.5,u=un*f.hl,q=(j*(NS+1)+i)*3;
+        /* soft creases that fan out from the tip while the flap is pulled back */
+        var w=wr?wr*t*Math.sin(un*Math.PI*7+t*3.1+ph)*(1-Math.abs(un)*1.2):0;
+        pos[q]=P.x+Hd.x*u+In.x*(al-sa*w);
+        pos[q+1]=P.y+Hd.y*u+In.y*(al-sa*w);
+        pos[q+2]=z0+up+ca*w;
       }
       f.al[j]=al;f.up[j]=up;
       a=theta+curl*Math.pow(t,2.4);f.an[j]=a;
@@ -722,9 +727,8 @@ window.GLENV=(function(){
     var ft=flaps[3],fb=flaps[2];
     frameAt(ft,ft.L,pt,tg);
     X.copy(ft.Hd);Y.copy(tg).negate();N.crossVectors(tg,ft.Hd);
-    M.makeBasis(X,Y,N);seals[0].quaternion.setFromRotationMatrix(M);
-    seals[0].position.copy(pt).addScaledVector(N,.007).addScaledVector(Y,.004*crack);
-    q2.setFromAxisAngle(ax.copy(N),-.05*crack);seals[0].quaternion.premultiply(q2);
+    M.makeBasis(X,Y,N);q2.setFromRotationMatrix(M);seals[0].quaternion.identity().slerp(q2,.28);
+    seals[0].position.copy(pt).addScaledVector(N,.007);seals[0].position.z+=.012;
     var ps=sealS*(1-.05*press);seals[0].scale.set(ps,ps,1);
     frameAt(fb,H*.47,pt,tg);
     X.copy(fb.Hd).negate();Y.copy(tg);N.crossVectors(tg,fb.Hd);
@@ -747,7 +751,7 @@ window.GLENV=(function(){
 
   /* motion: eased swing, with the tip leading and then trailing like real paper */
   function bez(x1,y1,x2,y2){return function(x){var lo=0,hi=1,t;for(var k=0;k<30;k++){t=(lo+hi)/2;var bx=3*(1-t)*(1-t)*t*x1+3*(1-t)*t*t*x2+t*t*t;bx<x?lo=t:hi=t;}t=(lo+hi)/2;return 3*(1-t)*(1-t)*t*y1+3*(1-t)*t*t*y2+t*t*t;};}
-  var ease=bez(.45,0,.25,1);
+  var ease=bez(.45,.05,.4,1);
   var cs=[[0,0],[.28,1],[.62,.55],[1,0]];
   function curlAt(t){for(var k=0;k<cs.length-1;k++){var a=cs[k],b=cs[k+1];if(t>=a[0]&&t<=b[0]){var u=(t-a[0])/(b[0]-a[0]);u=u*u*(3-2*u);return a[1]+(b[1]-a[1])*u;}}return 0;}
   var raf=0,t0=0;
@@ -757,7 +761,7 @@ window.GLENV=(function(){
     var pr=Math.min(Math.max(e/.32,0),1);press=Math.sin(Math.PI*pr);
     flaps.forEach(function(f){
       var p=Math.min(Math.max((e-f.sp.delay)/f.sp.dur,0),1);if(p<1)done=false;
-      update(f,-Math.PI*ease(p),.6*curlAt(p));
+      update(f,-(Math.PI/2+.22)*ease(p),.5*curlAt(p),.02*Math.sin(Math.PI*Math.min(p*1.2,1)));
     });
     placeSeal();render();
     raf=done?0:requestAnimationFrame(frame);
@@ -771,7 +775,8 @@ window.GLENV=(function(){
   if(document.fonts&&document.fonts.ready)document.fonts.ready.then(function(){
     if(seals){var full=sealTex();seals.forEach(function(m,k){var tx=new T.CanvasTexture(full);m.material.map.dispose();m.material.map=tx;m.customDepthMaterial.map=tx;m.material.needsUpdate=true;m.customDepthMaterial.needsUpdate=true;});render();}
   });
-  return {open:open,reset:reset};
+  function at(e){var n=performance.now();t0=n-e*1000;frame(n);cancelAnimationFrame(raf);raf=0;}
+  return {open:open,reset:reset,at:at};
 })();
 </script>
 <script>
@@ -787,8 +792,8 @@ window.GLENV=(function(){
     if(window.GLENV)GLENV.open();
     stage.classList.add('opening');
     clearTimeout(t);clearTimeout(t2);
-    t2=setTimeout(function(){slides[0].classList.add('in');setDot(0);}, reduce?20:(window.GLENV?2150:1500));
-    t=setTimeout(function(){stage.classList.add('reading');}, reduce?50:(window.GLENV?3200:3150));
+    t2=setTimeout(function(){slides[0].classList.add('in');setDot(0);}, reduce?20:(window.GLENV?1500:1500));
+    t=setTimeout(function(){stage.classList.add('reading');}, reduce?50:(window.GLENV?2650:3150));
   }
   function close(){
     clearTimeout(t);clearTimeout(t2);
