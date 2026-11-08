@@ -194,6 +194,8 @@ html{-webkit-text-size-adjust:100%}
 /* WebGL envelope (when available): the canvas replaces the CSS flaps */
 .glcv{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:0}
 .gate.gl .f,.gate.gl .sh{display:none}
+.stage:has(.gate.gl){--fly:2.5s}
+.gate.gl{transition:background-color 1.1s ease 1.3s}
 .glseal{display:none;position:absolute;left:50%;top:53%;z-index:6;width:clamp(76px,22vw,96px);aspect-ratio:1;transform:translate(-50%,-50%);
   border:0;padding:0;background:none;border-radius:50%;cursor:pointer;pointer-events:auto;-webkit-tap-highlight-color:transparent}
 .gate.gl .glseal{display:block}
@@ -205,7 +207,7 @@ html{-webkit-text-size-adjust:100%}
 .bfly{position:fixed;left:50%;top:50%;z-index:25;width:clamp(84px,25vw,108px);margin:calc(clamp(84px,25vw,108px)/-2.4) 0 0 calc(clamp(84px,25vw,108px)/-2);pointer-events:none;opacity:0;visibility:hidden}
 .bfly svg{display:block;width:100%;height:auto;overflow:visible;filter:drop-shadow(0 6px 6px rgba(60,20,30,.25))}
 .bfly .wing{transform-box:fill-box;transform-origin:100% 50%;animation:flap .2s ease-in-out infinite alternate}
-.stage.opening .bfly{visibility:visible;animation:flyaway 3.8s cubic-bezier(.4,0,.6,1) 1.9s both}
+.stage.opening .bfly{visibility:visible;animation:flyaway 3.8s cubic-bezier(.4,0,.6,1) var(--fly,1.9s) both}
 @keyframes flap{from{transform:scaleX(1)}to{transform:scaleX(.22)}}
 @keyframes flyaway{
   0%{opacity:0;transform:translate(0,10px) scale(.35) rotate(0deg)}
@@ -579,10 +581,10 @@ window.GLENV=(function(){
 
   var scene=new T.Scene();
   var cam=new T.PerspectiveCamera(32,1,0.05,40);
-  scene.add(new T.HemisphereLight(0xffffff,0x8d927f,0.62));
-  var sun=new T.DirectionalLight(0xfffaf0,0.55);
+  scene.add(new T.HemisphereLight(0xffffff,0xc2c6b4,0.68));
+  var sun=new T.DirectionalLight(0xfffaf0,0.48);
   sun.position.set(-1.1,1.9,4.2);sun.castShadow=true;
-  sun.shadow.mapSize.set(2048,2048);sun.shadow.bias=-0.0008;
+  sun.shadow.mapSize.set(1024,1024);sun.shadow.bias=-0.0008;
   if('normalBias' in sun.shadow)sun.shadow.normalBias=0.004;
   scene.add(sun);scene.add(sun.target);
   var floor=new T.Mesh(new T.PlaneGeometry(1,1),new T.ShadowMaterial({opacity:0.2}));
@@ -611,6 +613,15 @@ window.GLENV=(function(){
     g.save();g.scale(2,2);leaves(g,liner?'rgba(86,99,77,.13)':'rgba(255,255,255,.05)');g.restore();
     var t=new T.CanvasTexture(c);t.anisotropy=Math.min(8,r.capabilities.getMaxAnisotropy());return t;
   }
+  function crackPts(){var p=[],x=-40,k=0;while(x<552){p.push([x,256+(k%2?-14:16)+((k*37)%11)-5]);x+=36+((k*53)%17);k++;}return p;}
+  var CR=null;
+  function halfTex(full,top){
+    CR=CR||crackPts();
+    var c=document.createElement('canvas');c.width=c.height=512;var g=c.getContext('2d');
+    g.beginPath();g.moveTo(-40,top?-40:552);CR.forEach(function(q){g.lineTo(q[0],q[1]);});g.lineTo(552,top?-40:552);g.closePath();g.clip();
+    g.drawImage(full,0,0);
+    var t=new T.CanvasTexture(c);return t;
+  }
   function sealTex(){
     var c=document.createElement('canvas');c.width=c.height=512;var g=c.getContext('2d');
     g.translate(256,256);
@@ -627,20 +638,21 @@ window.GLENV=(function(){
     g.font='italic 112px "Pinyon Script", "Cormorant Garamond", Georgia, serif';
     g.fillStyle='rgba(178,71,76,.55)';g.fillText('A&V',-3,13);
     g.fillStyle='rgba(70,8,12,.92)';g.fillText('A&V',0,16);
-    return new T.CanvasTexture(c);
+    return c;
   }
 
   /* flaps: bending strips hinged on the screen edges */
-  var NS=10,NV=56,flaps=[],seal=null,W=1,H=2;
+  var NS=10,NV=64,flaps=[],seals=null,W=1,H=2,crack=0,lift=0;
+  var root=new T.Group();scene.add(root);
   var specs=[
-    {k:'l',in:[1,0],z:.002,len:.51,col:'#4d5944',delay:1.35,dur:1.6},
-    {k:'r',in:[-1,0],z:.0026,len:.51,col:'#4b5742',delay:1.45,dur:1.6},
-    {k:'bt',in:[0,1],z:.0045,len:.53,col:'#525f49',delay:.95,dur:1.6},
-    {k:'t',in:[0,-1],z:.0065,len:.53,col:'#58654f',delay:.25,dur:1.7}
+    {k:'l',in:[1,0],z:.002,len:.51,col:'#4d5944',delay:1.75,dur:1.9},
+    {k:'r',in:[-1,0],z:.0026,len:.51,col:'#4b5742',delay:1.88,dur:1.9},
+    {k:'bt',in:[0,1],z:.0045,len:.53,col:'#525f49',delay:1.25,dur:1.9},
+    {k:'t',in:[0,-1],z:.0065,len:.53,col:'#58654f',delay:.45,dur:2.0}
   ];
   var Z=new T.Vector3(0,0,1);
   function build(){
-    flaps.forEach(function(f){scene.remove(f.front);scene.remove(f.back);f.geo.dispose();});
+    flaps.forEach(function(f){root.remove(f.front);root.remove(f.back);f.geo.dispose();});
     flaps=[];
     specs.forEach(function(sp){
       var In=new T.Vector3(sp.in[0],sp.in[1],0);
@@ -660,18 +672,22 @@ window.GLENV=(function(){
       var back=new T.Mesh(geo,new T.MeshLambertMaterial({map:bt,alphaTest:.5,side:T.BackSide}));
       front.castShadow=true;front.receiveShadow=true;back.receiveShadow=true;
       front.customDepthMaterial=new T.MeshDepthMaterial({depthPacking:T.RGBADepthPacking,map:ft,alphaTest:.5,side:T.DoubleSide});
-      scene.add(front);scene.add(back);
-      var f={sp:sp,geo:geo,pos:pos,front:front,back:back,In:In,Hd:Hd,P:P,hl:hingeLen,L:L,tip:new T.Vector3(),tan:new T.Vector3()};
+      root.add(front);root.add(back);
+      var f={sp:sp,geo:geo,pos:pos,front:front,back:back,In:In,Hd:Hd,P:P,hl:hingeLen,L:L,al:new Float32Array(NV+1),up:new Float32Array(NV+1),an:new Float32Array(NV+1)};
       update(f,0,0);flaps.push(f);
     });
-    if(!seal){
-      seal=new T.Mesh(new T.PlaneGeometry(1,1),new T.MeshLambertMaterial({map:sealTex(),alphaTest:.5}));
-      seal.castShadow=true;
-      seal.customDepthMaterial=new T.MeshDepthMaterial({depthPacking:T.RGBADepthPacking,map:seal.material.map,alphaTest:.5});
-      scene.add(seal);
+    if(!seals){
+      var full=sealTex();
+      seals=[true,false].map(function(top){
+        var tx=halfTex(full,top);
+        var m=new T.Mesh(new T.PlaneGeometry(1,1),new T.MeshLambertMaterial({map:tx,alphaTest:.5}));
+        m.castShadow=true;
+        m.customDepthMaterial=new T.MeshDepthMaterial({depthPacking:T.RGBADepthPacking,map:tx,alphaTest:.5});
+        root.add(m);return m;
+      });
     }
     var s=Math.min(Math.max(W*0.23,76/innerWidth*W),96/innerWidth*W);
-    seal.scale.set(s*1.06,s*1.06,1);
+    seals.forEach(function(m){m.scale.set(s*1.06,s*1.06,1);});
     placeSeal();
   }
   function update(f,theta,curl){
@@ -684,24 +700,36 @@ window.GLENV=(function(){
         pos[q+1]=P.y+Hd.y*u+In.y*al;
         pos[q+2]=z0+up;
       }
-      a=theta+curl*t*t;
+      f.al[j]=al;f.up[j]=up;
+      a=theta+curl*Math.pow(t,2.4);f.an[j]=a;
       al+=dv*Math.cos(a);up+=dv*Math.sin(a);
     }
     f.geo.attributes.position.needsUpdate=true;
     f.geo.computeVertexNormals();
     f.geo.computeBoundingSphere();
-    // tip of the centre line, and the paper's direction there
-    var q=(NV*(NS+1)+NS/2)*3;
-    f.tip.set(pos[q],pos[q+1],pos[q+2]);
-    var at=theta+curl;
-    f.tan.copy(In).multiplyScalar(Math.cos(at)).addScaledVector(Z,Math.sin(at));
   }
-  var M=new T.Matrix4(),X=new T.Vector3(),Y=new T.Vector3(),N=new T.Vector3();
+  /* a point on a flap's centre line, s from the hinge, with the paper's direction there */
+  function frameAt(f,s,out,tan){
+    var x=Math.min(Math.max(s/f.L*NV,0),NV-.001),j=Math.floor(x),u=x-j;
+    var al=f.al[j]+(f.al[j+1]-f.al[j])*u,up=f.up[j]+(f.up[j+1]-f.up[j])*u,a=f.an[j];
+    out.copy(f.P).addScaledVector(f.In,al);out.z=f.sp.z+up;
+    tan.copy(f.In).multiplyScalar(Math.cos(a)).addScaledVector(Z,Math.sin(a));
+  }
+  var M=new T.Matrix4(),X=new T.Vector3(),Y=new T.Vector3(),N=new T.Vector3(),pt=new T.Vector3(),tg=new T.Vector3(),q2=new T.Quaternion(),ax=new T.Vector3();
+  /* upper half rides the top flap's tip; lower half stays on the bottom flap */
   function placeSeal(){
-    var f=flaps[3];if(!f||!seal)return;
-    X.copy(f.Hd);Y.copy(f.tan).negate();N.crossVectors(f.tan,f.Hd);
-    M.makeBasis(X,Y,N);seal.quaternion.setFromRotationMatrix(M);
-    seal.position.copy(f.tip).addScaledVector(N,.006);
+    if(!seals||flaps.length<4)return;
+    var ft=flaps[3],fb=flaps[2];
+    frameAt(ft,ft.L,pt,tg);
+    X.copy(ft.Hd);Y.copy(tg).negate();N.crossVectors(tg,ft.Hd);
+    M.makeBasis(X,Y,N);seals[0].quaternion.setFromRotationMatrix(M);
+    seals[0].position.copy(pt).addScaledVector(N,.007).addScaledVector(Y,.0022*crack);
+    q2.setFromAxisAngle(ax.copy(N),-.022*crack);seals[0].quaternion.premultiply(q2);
+    frameAt(fb,H*.47,pt,tg);
+    X.copy(fb.Hd).negate();Y.copy(tg);N.crossVectors(tg,fb.Hd);
+    M.makeBasis(X,Y,N);seals[1].quaternion.setFromRotationMatrix(M);
+    seals[1].position.copy(pt).addScaledVector(N,.0065).addScaledVector(Y,-.0018*crack);
+    q2.setFromAxisAngle(ax.copy(N),.016*crack);seals[1].quaternion.premultiply(q2);
   }
   function resize(){
     var w=innerWidth,h=innerHeight;
@@ -718,27 +746,32 @@ window.GLENV=(function(){
 
   /* motion: eased swing, with the tip leading and then trailing like real paper */
   function bez(x1,y1,x2,y2){return function(x){var lo=0,hi=1,t;for(var k=0;k<30;k++){t=(lo+hi)/2;var bx=3*(1-t)*(1-t)*t*x1+3*(1-t)*t*t*x2+t*t*t;bx<x?lo=t:hi=t;}t=(lo+hi)/2;return 3*(1-t)*(1-t)*t*y1+3*(1-t)*t*t*y2+t*t*t;};}
-  var ease=bez(.55,.06,.3,1);
+  var ease=bez(.5,.02,.28,1);
   var cs=[[0,0],[.2,1],[.5,.15],[.78,-.6],[1,0]];
   function curlAt(t){for(var k=0;k<cs.length-1;k++){var a=cs[k],b=cs[k+1];if(t>=a[0]&&t<=b[0]){var u=(t-a[0])/(b[0]-a[0]);u=u*u*(3-2*u);return a[1]+(b[1]-a[1])*u;}}return 0;}
   var raf=0,t0=0;
   function frame(now){
-    var e=(now-t0)/1000,done=true;
+    var e=(now-t0)/1000,done=e<4.2;
+    crack=Math.min(Math.max((e-.08)/.22,0),1);crack=crack*crack*(3-2*crack);
+    /* the envelope is picked up a little, then laid back down */
+    var lp=Math.min(Math.max(e/1.6,0),1),lb=Math.sin(Math.PI*lp)*(1-lp*.35);
+    root.rotation.x=-.07*lb;root.rotation.y=.025*lb;root.position.z=.06*lb;
+    if(e>=.08&&e<.3){var sh=Math.sin(e*120)*(.3-e)*.01;root.position.x=sh;}else root.position.x=0;
     flaps.forEach(function(f){
       var p=Math.min(Math.max((e-f.sp.delay)/f.sp.dur,0),1);if(p<1)done=false;
-      update(f,Math.PI*ease(p),.55*curlAt(p));
+      update(f,Math.PI*ease(p),.95*curlAt(p));
     });
     placeSeal();render();
     raf=done?0:requestAnimationFrame(frame);
   }
   function open(){cancelAnimationFrame(raf);t0=performance.now();raf=requestAnimationFrame(frame);}
-  function reset(){cancelAnimationFrame(raf);raf=0;flaps.forEach(function(f){update(f,0,0);});placeSeal();render();}
+  function reset(){cancelAnimationFrame(raf);raf=0;crack=0;root.rotation.set(0,0,0);root.position.set(0,0,0);flaps.forEach(function(f){update(f,0,0);});placeSeal();render();}
 
   gate.insertBefore(cv,gate.firstChild);gate.classList.add('gl');
   window.addEventListener('resize',function(){if(!raf)resize();});
   resize();
   if(document.fonts&&document.fonts.ready)document.fonts.ready.then(function(){
-    if(seal){seal.material.map.dispose();seal.material.map=sealTex();seal.customDepthMaterial.map=seal.material.map;seal.material.needsUpdate=true;render();}
+    if(seals){var full=sealTex();seals.forEach(function(m,k){var tx=halfTex(full,k===0);m.material.map.dispose();m.material.map=tx;m.customDepthMaterial.map=tx;m.material.needsUpdate=true;m.customDepthMaterial.needsUpdate=true;});render();}
   });
   return {open:open,reset:reset};
 })();
@@ -756,8 +789,8 @@ window.GLENV=(function(){
     if(window.GLENV)GLENV.open();
     stage.classList.add('opening');
     clearTimeout(t);clearTimeout(t2);
-    t2=setTimeout(function(){slides[0].classList.add('in');setDot(0);}, reduce?20:1500);
-    t=setTimeout(function(){stage.classList.add('reading');}, reduce?50:3150);
+    t2=setTimeout(function(){slides[0].classList.add('in');setDot(0);}, reduce?20:(window.GLENV?2000:1500));
+    t=setTimeout(function(){stage.classList.add('reading');}, reduce?50:(window.GLENV?3950:3150));
   }
   function close(){
     clearTimeout(t);clearTimeout(t2);
