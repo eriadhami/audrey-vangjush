@@ -194,8 +194,8 @@ html{-webkit-text-size-adjust:100%}
 /* WebGL envelope (when available): the canvas replaces the CSS flaps */
 .glcv{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:0}
 .gate.gl .f,.gate.gl .sh{display:none}
-.stage:has(.gate.gl){--fly:2.5s}
-.gate.gl{transition:background-color 1.1s ease 1.3s}
+.stage:has(.gate.gl){--fly:2.35s}
+.gate.gl{transition:background-color 1s ease 1.75s}
 .glseal{display:none;position:absolute;left:50%;top:53%;z-index:6;width:clamp(76px,22vw,96px);aspect-ratio:1;transform:translate(-50%,-50%);
   border:0;padding:0;background:none;border-radius:50%;cursor:pointer;pointer-events:auto;-webkit-tap-highlight-color:transparent}
 .gate.gl .glseal{display:block}
@@ -581,13 +581,13 @@ window.GLENV=(function(){
 
   var scene=new T.Scene();
   var cam=new T.PerspectiveCamera(32,1,0.05,40);
-  scene.add(new T.HemisphereLight(0xffffff,0xc2c6b4,0.68));
-  var sun=new T.DirectionalLight(0xfffaf0,0.48);
+  scene.add(new T.HemisphereLight(0xffffff,0xb3b8a4,0.66));
+  var sun=new T.DirectionalLight(0xfffaf0,0.5);
   sun.position.set(-1.1,1.9,4.2);sun.castShadow=true;
   sun.shadow.mapSize.set(1024,1024);sun.shadow.bias=-0.0008;
   if('normalBias' in sun.shadow)sun.shadow.normalBias=0.004;
   scene.add(sun);scene.add(sun.target);
-  var floor=new T.Mesh(new T.PlaneGeometry(1,1),new T.ShadowMaterial({opacity:0.2}));
+  var floor=new T.Mesh(new T.PlaneGeometry(1,1),new T.ShadowMaterial({opacity:0.2,depthWrite:false}));
   floor.position.z=-0.03;floor.receiveShadow=true;scene.add(floor);
 
   /* textures */
@@ -642,13 +642,13 @@ window.GLENV=(function(){
   }
 
   /* flaps: bending strips hinged on the screen edges */
-  var NS=10,NV=64,flaps=[],seals=null,W=1,H=2,crack=0,lift=0;
+  var NS=10,NV=64,flaps=[],seals=null,W=1,H=2,crack=0,press=0,sealS=1;
   var root=new T.Group();scene.add(root);
   var specs=[
-    {k:'l',in:[1,0],z:.002,len:.51,col:'#4d5944',delay:1.75,dur:1.9},
-    {k:'r',in:[-1,0],z:.0026,len:.51,col:'#4b5742',delay:1.88,dur:1.9},
-    {k:'bt',in:[0,1],z:.0045,len:.53,col:'#525f49',delay:1.25,dur:1.9},
-    {k:'t',in:[0,-1],z:.0065,len:.53,col:'#58654f',delay:.45,dur:2.0}
+    {k:'l',in:[1,0],z:.002,len:.51,col:'#4d5944',delay:.38,dur:1.55},
+    {k:'r',in:[-1,0],z:.0026,len:.51,col:'#4b5742',delay:.44,dur:1.55},
+    {k:'bt',in:[0,1],z:.0045,len:.53,col:'#525f49',delay:.3,dur:1.55},
+    {k:'t',in:[0,-1],z:.0065,len:.53,col:'#58654f',delay:1.3,dur:1.45}
   ];
   var Z=new T.Vector3(0,0,1);
   function build(){
@@ -679,15 +679,15 @@ window.GLENV=(function(){
     if(!seals){
       var full=sealTex();
       seals=[true,false].map(function(top){
-        var tx=halfTex(full,top);
+        var tx=new T.CanvasTexture(full);
         var m=new T.Mesh(new T.PlaneGeometry(1,1),new T.MeshLambertMaterial({map:tx,alphaTest:.5}));
         m.castShadow=true;
         m.customDepthMaterial=new T.MeshDepthMaterial({depthPacking:T.RGBADepthPacking,map:tx,alphaTest:.5});
-        root.add(m);return m;
+        root.add(m);if(!top)m.visible=false;return m;
       });
     }
     var s=Math.min(Math.max(W*0.23,76/innerWidth*W),96/innerWidth*W);
-    seals.forEach(function(m){m.scale.set(s*1.06,s*1.06,1);});
+    sealS=s*1.06;seals.forEach(function(m){m.scale.set(sealS,sealS,1);});
     placeSeal();
   }
   function update(f,theta,curl){
@@ -723,13 +723,14 @@ window.GLENV=(function(){
     frameAt(ft,ft.L,pt,tg);
     X.copy(ft.Hd);Y.copy(tg).negate();N.crossVectors(tg,ft.Hd);
     M.makeBasis(X,Y,N);seals[0].quaternion.setFromRotationMatrix(M);
-    seals[0].position.copy(pt).addScaledVector(N,.007).addScaledVector(Y,.0022*crack);
-    q2.setFromAxisAngle(ax.copy(N),-.022*crack);seals[0].quaternion.premultiply(q2);
+    seals[0].position.copy(pt).addScaledVector(N,.007).addScaledVector(Y,.004*crack);
+    q2.setFromAxisAngle(ax.copy(N),-.05*crack);seals[0].quaternion.premultiply(q2);
+    var ps=sealS*(1-.05*press);seals[0].scale.set(ps,ps,1);
     frameAt(fb,H*.47,pt,tg);
     X.copy(fb.Hd).negate();Y.copy(tg);N.crossVectors(tg,fb.Hd);
     M.makeBasis(X,Y,N);seals[1].quaternion.setFromRotationMatrix(M);
-    seals[1].position.copy(pt).addScaledVector(N,.0065).addScaledVector(Y,-.0018*crack);
-    q2.setFromAxisAngle(ax.copy(N),.016*crack);seals[1].quaternion.premultiply(q2);
+    seals[1].position.copy(pt).addScaledVector(N,.0065).addScaledVector(Y,-.004*crack);
+    q2.setFromAxisAngle(ax.copy(N),.04*crack);seals[1].quaternion.premultiply(q2);
   }
   function resize(){
     var w=innerWidth,h=innerHeight;
@@ -746,32 +747,29 @@ window.GLENV=(function(){
 
   /* motion: eased swing, with the tip leading and then trailing like real paper */
   function bez(x1,y1,x2,y2){return function(x){var lo=0,hi=1,t;for(var k=0;k<30;k++){t=(lo+hi)/2;var bx=3*(1-t)*(1-t)*t*x1+3*(1-t)*t*t*x2+t*t*t;bx<x?lo=t:hi=t;}t=(lo+hi)/2;return 3*(1-t)*(1-t)*t*y1+3*(1-t)*t*t*y2+t*t*t;};}
-  var ease=bez(.5,.02,.28,1);
-  var cs=[[0,0],[.2,1],[.5,.15],[.78,-.6],[1,0]];
+  var ease=bez(.45,0,.25,1);
+  var cs=[[0,0],[.28,1],[.62,.55],[1,0]];
   function curlAt(t){for(var k=0;k<cs.length-1;k++){var a=cs[k],b=cs[k+1];if(t>=a[0]&&t<=b[0]){var u=(t-a[0])/(b[0]-a[0]);u=u*u*(3-2*u);return a[1]+(b[1]-a[1])*u;}}return 0;}
   var raf=0,t0=0;
   function frame(now){
-    var e=(now-t0)/1000,done=e<4.2;
-    crack=Math.min(Math.max((e-.08)/.22,0),1);crack=crack*crack*(3-2*crack);
-    /* the envelope is picked up a little, then laid back down */
-    var lp=Math.min(Math.max(e/1.6,0),1),lb=Math.sin(Math.PI*lp)*(1-lp*.35);
-    root.rotation.x=-.07*lb;root.rotation.y=.025*lb;root.position.z=.06*lb;
-    if(e>=.08&&e<.3){var sh=Math.sin(e*120)*(.3-e)*.01;root.position.x=sh;}else root.position.x=0;
+    var e=(now-t0)/1000,done=true;
+    crack=0;
+    var pr=Math.min(Math.max(e/.32,0),1);press=Math.sin(Math.PI*pr);
     flaps.forEach(function(f){
       var p=Math.min(Math.max((e-f.sp.delay)/f.sp.dur,0),1);if(p<1)done=false;
-      update(f,Math.PI*ease(p),.95*curlAt(p));
+      update(f,-Math.PI*ease(p),.6*curlAt(p));
     });
     placeSeal();render();
     raf=done?0:requestAnimationFrame(frame);
   }
   function open(){cancelAnimationFrame(raf);t0=performance.now();raf=requestAnimationFrame(frame);}
-  function reset(){cancelAnimationFrame(raf);raf=0;crack=0;root.rotation.set(0,0,0);root.position.set(0,0,0);flaps.forEach(function(f){update(f,0,0);});placeSeal();render();}
+  function reset(){cancelAnimationFrame(raf);raf=0;crack=0;press=0;root.rotation.set(0,0,0);root.position.set(0,0,0);flaps.forEach(function(f){update(f,0,0);});placeSeal();render();}
 
   gate.insertBefore(cv,gate.firstChild);gate.classList.add('gl');
   window.addEventListener('resize',function(){if(!raf)resize();});
   resize();
   if(document.fonts&&document.fonts.ready)document.fonts.ready.then(function(){
-    if(seals){var full=sealTex();seals.forEach(function(m,k){var tx=halfTex(full,k===0);m.material.map.dispose();m.material.map=tx;m.customDepthMaterial.map=tx;m.material.needsUpdate=true;m.customDepthMaterial.needsUpdate=true;});render();}
+    if(seals){var full=sealTex();seals.forEach(function(m,k){var tx=new T.CanvasTexture(full);m.material.map.dispose();m.material.map=tx;m.customDepthMaterial.map=tx;m.material.needsUpdate=true;m.customDepthMaterial.needsUpdate=true;});render();}
   });
   return {open:open,reset:reset};
 })();
@@ -789,8 +787,8 @@ window.GLENV=(function(){
     if(window.GLENV)GLENV.open();
     stage.classList.add('opening');
     clearTimeout(t);clearTimeout(t2);
-    t2=setTimeout(function(){slides[0].classList.add('in');setDot(0);}, reduce?20:(window.GLENV?2000:1500));
-    t=setTimeout(function(){stage.classList.add('reading');}, reduce?50:(window.GLENV?3950:3150));
+    t2=setTimeout(function(){slides[0].classList.add('in');setDot(0);}, reduce?20:(window.GLENV?2150:1500));
+    t=setTimeout(function(){stage.classList.add('reading');}, reduce?50:(window.GLENV?3200:3150));
   }
   function close(){
     clearTimeout(t);clearTimeout(t2);
